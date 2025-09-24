@@ -20,6 +20,26 @@ dlo::OdomNode::OdomNode(ros::NodeHandle node_handle) : nh(node_handle) {
 
   this->getParams();
 
+  // Load static PCD map
+  this->map_cloud.reset(new pcl::PointCloud<PointType>);
+  std::string map_path;
+  ros::param::param<std::string>("~map_path", map_path, "");
+  if (pcl::io::loadPCDFile<PointType>(map_path, *this->map_cloud) == -1) {
+    ROS_ERROR("Couldn't read map PCD file: %s", map_path.c_str());
+  } else {
+    ROS_INFO("Loaded map with %lu points", this->map_cloud->points.size());
+  }
+
+  // Set target cloud for scan-to-map GICP
+  this->target_cloud = this->map_cloud;
+  this->gicp.setInputTarget(this->target_cloud);
+  this->gicp.calculateTargetCovariances();
+
+  // Initial pose subscriber
+  this->initial_pose_sub = this->nh.subscribe(
+      "/initial_pose", 1, &dlo::OdomNode::initialPoseCB, this);
+
+
   this->stop_publish_thread = false;
   this->stop_publish_keyframe_thread = false;
   this->stop_metrics_thread = false;
@@ -82,13 +102,13 @@ dlo::OdomNode::OdomNode(ros::NodeHandle node_handle) : nh(node_handle) {
   this->current_scan = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
   this->current_scan_t = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
 
-  this->keyframe_cloud = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
-  this->keyframes_cloud = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
-  this->num_keyframes = 0;
+  //this->keyframe_cloud = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
+  //this->keyframes_cloud = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
+  //this->num_keyframes = 0;
 
-  this->submap_cloud = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
-  this->submap_hasChanged = true;
-  this->submap_kf_idx_prev.clear();
+  //this->submap_cloud = pcl::PointCloud<PointType>::Ptr (new pcl::PointCloud<PointType>);
+  //this->submap_hasChanged = true;
+  //this->submap_kf_idx_prev.clear();
 
   this->source_cloud = nullptr;
   this->target_cloud = nullptr;
@@ -630,8 +650,65 @@ void dlo::OdomNode::initializeDLO() {
 /**
  * ICP Point Cloud Callback
  **/
-
+// new code that loads an existing map
 void dlo::OdomNode::icpCB(const sensor_msgs::PointCloud2ConstPtr& pc) {
+  this->scan_stamp = pc->header.stamp;
+  pcl::fromROSMsg(*pc, *this->current_scan);
+
+  if (this->current_scan->points.size() < this->gicp_min_num_points_) {
+    ROS_WARN("Low number of points in scan!");
+    return;
+  }
+
+  if (!this->got_initial_pose) {
+    ROS_WARN_THROTTLE(5.0, "Waiting for initial pose on /initial_pose...");
+    return;
+  }
+
+  this->preprocessPoints();
+
+  // Source is current scan
+  this->setInputSources();
+
+  // Run scan-to-map GICP
+  pcl::PointCloud<PointType> aligned;
+  this->gicp.align(aligned, this->T);
+
+  if (this->gicp.hasConverged()) {
+    this->T = this->gicp.getFinalTransformation();
+    this->pose = this->T.block<3,1>(0,3);
+    this->rotq = Eigen::Quaternionf(this->T.block<3,3>(0,0));
+  } else {
+    ROS_WARN("GICP did not converge on this iteration!");
+  }
+
+  this->publishToROS();
+}
+/**
+ * inital pose callback
+ **/
+void dlo::OdomNode::initialPoseCB(const geometry_msgs::PoseStampedConstPtr& msg) {
+  this->pose = Eigen::Vector3f(
+      msg->pose.position.x,
+      msg->pose.position.y,
+      msg->pose.position.z);
+  this->rotq = Eigen::Quaternionf(
+      msg->pose.orientation.w,
+      msg->pose.orientation.x,
+      msg->pose.orientation.y,
+      msg->pose.orientation.z);
+
+  this->T.setIdentity();
+  this->T.block<3,3>(0,0) = this->rotq.toRotationMatrix();
+  this->T.block<3,1>(0,3) = this->pose;
+
+  this->got_initial_pose = true;
+  ROS_INFO("Received initial pose.");
+}
+
+
+// old code
+/*void dlo::OdomNode::icpCB(const sensor_msgs::PointCloud2ConstPtr& pc) {
 
   double then = ros::Time::now().toSec();
   this->scan_stamp = pc->header.stamp;
@@ -675,7 +752,7 @@ void dlo::OdomNode::icpCB(const sensor_msgs::PointCloud2ConstPtr& pc) {
 
   // Set new frame as input source for both gicp objects
   this->setInputSources();
-
+  // HERE HERE HERE HERE HERE HERE HERE HERE HERE HERE Instead of detecting keyframes (here) and extracting a submap (825) on each callback, load in your PCD map (in the constructor) and scan match with that on every iteration (your map being the target cloud). Note that you may need to provide the system with an initial pose though.
   // Get the next pose via IMU + S2S + S2M
   this->getNextPose();
 
@@ -699,7 +776,7 @@ void dlo::OdomNode::icpCB(const sensor_msgs::PointCloud2ConstPtr& pc) {
   this->debug_thread = std::thread( &dlo::OdomNode::debug, this );
   this->debug_thread.detach();
 
-}
+}*/
 
 
 /**
@@ -822,7 +899,7 @@ void dlo::OdomNode::getNextPose() {
   // Swap source and target (which also swaps KdTrees internally) for next S2S
   this->gicp_s2s.swapSourceAndTarget();
 
-  //
+  // HERE HERE Instead of detecting keyframes (678) and extracting a submap (here) on each callback, load in your PCD map (in the constructor) and scan match with that on every iteration (your map being the target cloud). Note that you may need to provide the system with an initial pose though.
   // FRAME-TO-SUBMAP
   //
 

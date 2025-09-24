@@ -25,6 +25,10 @@ public:
 
 private:
 
+  pcl::PointCloud<PointType>::Ptr map_cloud;
+  ros::Subscriber initial_pose_sub;
+  bool got_initial_pose = false;
+
   void abortTimerCB(const ros::TimerEvent& e);
   void icpCB(const sensor_msgs::PointCloud2ConstPtr& pc);
   void imuCB(const sensor_msgs::Imu::ConstPtr& imu);

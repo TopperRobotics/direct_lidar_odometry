@@ -1,3 +1,6 @@
+### What has changed?
+You will need to provide a PCD to ~map_path, and a PoseStamped will need to be published at /inital_pose. I have not changed anything else.
+
 # Direct LiDAR Odometry: <br> Fast Localization with Dense Point Clouds
 
 #### [[IEEE RA-L](https://ieeexplore.ieee.org/document/9681177)] [[ArXiv](https://arxiv.org/abs/2110.00605)] [[Video](https://www.youtube.com/watch?v=APot6QP_wvg)] [[Code](https://github.com/vectr-ucla/direct_lidar_odometry)]
