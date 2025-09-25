@@ -111,7 +111,7 @@ dlo::OdomNode::OdomNode(ros::NodeHandle node_handle) : nh(node_handle) {
   //this->submap_kf_idx_prev.clear();
 
   this->source_cloud = nullptr;
-  this->target_cloud = nullptr;
+  //this->target_cloud = nullptr;
 
   this->convex_hull.setDimension(3);
   this->concave_hull.setDimension(3);
@@ -234,7 +234,7 @@ void dlo::OdomNode::getParams() {
   ros::param::param<int>("~dlo/odomNode/submap/keyframe/kcc", this->submap_kcc_, 10);
 
   // Initial Position
-  ros::param::param<bool>("~dlo/odomNode/initialPose/use", this->initial_pose_use_, false);
+  //ros::param::param<bool>("~dlo/odomNode/initialPose/use", this->initial_pose_use_, false);
 
   double px, py, pz, qx, qy, qz, qw;
   ros::param::param<double>("~dlo/odomNode/initialPose/position/x", px, 0.0);
@@ -688,6 +688,18 @@ void dlo::OdomNode::icpCB(const sensor_msgs::PointCloud2ConstPtr& pc) {
  * inital pose callback
  **/
 void dlo::OdomNode::initialPoseCB(const geometry_msgs::PoseStampedConstPtr& msg) {
+  // set known position
+  //this->pose = this->initial_position_;
+  //this->T.block(0,3,3,1) = this->pose;
+  //this->T_s2s.block(0,3,3,1) = this->pose;
+  //this->T_s2s_prev.block(0,3,3,1) = this->pose;
+  //this->origin = this->initial_position_;
+  
+  // set known orientation
+  //this->rotq = this->initial_orientation_;
+  //this->T.block(0,0,3,3) = this->rotq.toRotationMatrix();
+  //this->T_s2s.block(0,0,3,3) = this->rotq.toRotationMatrix();
+  //this->T_s2s_prev.block(0,0,3,3) = this->rotq.toRotationMatrix();
   this->pose = Eigen::Vector3f(
       msg->pose.position.x,
       msg->pose.position.y,

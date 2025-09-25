@@ -28,6 +28,7 @@ private:
   pcl::PointCloud<PointType>::Ptr map_cloud;
   ros::Subscriber initial_pose_sub;
   bool got_initial_pose = false;
+  bool inital_pose_use_ = true;
 
   void abortTimerCB(const ros::TimerEvent& e);
   void icpCB(const sensor_msgs::PointCloud2ConstPtr& pc);
@@ -214,9 +215,9 @@ private:
   int submap_kcc_;
   double submap_concave_alpha_;
 
-  bool initial_pose_use_;
-  Eigen::Vector3f initial_position_;
-  Eigen::Quaternionf initial_orientation_;
+  //bool initial_pose_use_;
+  //Eigen::Vector3f initial_position_;
+  //Eigen::Quaternionf initial_orientation_;
 
   bool crop_use_;
   double crop_size_;
